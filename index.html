@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>Orb Smash</title>
+  <meta name="description" content="Kanone steuern, Kugeln zerschießen, aufrüsten. Läuft offline.">
+  <meta name="theme-color" content="#0b0420">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Orb Smash">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="cv"></canvas>
+  <div id="safe"></div>
+
+  <header id="hud" class="hidden">
+    <button id="btn-pause" class="round" aria-label="Pause"><span></span><span></span></button>
+    <div class="hud-mid">
+      <div id="hud-level">Level 1</div>
+      <div class="bar"><div id="hud-bar"></div></div>
+    </div>
+    <div class="pill"><i class="coin"></i><span id="hud-coins">0</span></div>
+  </header>
+
+  <section id="menu" class="screen hidden">
+    <div class="menu-inner">
+      <h1 class="logo"><span>ORB</span><span>SMASH</span></h1>
+      <div class="wallet"><i class="coin"></i><span id="menu-coins">0</span></div>
+
+      <div id="install-hint" class="hint hidden">
+        <p>Für den Homescreen: unten auf <b>Teilen</b> <span class="share"></span> tippen, dann <b>„Zum Home-Bildschirm“</b>. Danach läuft das Spiel auch offline.</p>
+        <button id="hint-close" aria-label="Hinweis schließen">×</button>
+      </div>
+
+      <div id="shop" class="shop"></div>
+
+      <button id="btn-play" class="btn primary"><small id="play-sub">Level 1</small>SPIELEN</button>
+
+      <div class="menu-foot">
+        <span id="best">Rekord: Level 1</span>
+        <button id="btn-sound" class="link">Ton: an</button>
+        <button id="btn-reset" class="link">Zurücksetzen</button>
+      </div>
+      <div class="howto">Finger auflegen und ziehen: Die Kanone fährt mit und schießt. Kugeln zerfallen beim Platzen in kleinere. Nicht berühren lassen!</div>
+      <div id="version" class="version"></div>
+    </div>
+  </section>
+
+  <section id="pause" class="screen hidden">
+    <div class="panel">
+      <h2>Pause</h2>
+      <button id="btn-resume" class="btn primary">Weiter</button>
+      <button id="btn-quit" class="btn">Zum Menü</button>
+    </div>
+  </section>
+
+  <section id="result" class="screen hidden">
+    <div class="panel">
+      <h2 id="res-title">Level geschafft!</h2>
+      <p id="res-text"></p>
+      <div id="res-coins" class="res-coins"></div>
+      <div class="row">
+        <button id="res-retry" class="btn">Nochmal</button>
+        <button id="res-next" class="btn primary">Weiter</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="rotate" class="screen"><p>Bitte das Handy hochkant halten 📱</p></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
