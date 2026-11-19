@@ -2,7 +2,7 @@
 // damit das Spiel danach komplett offline startet.
 // Bei jeder Aenderung am Spiel VERSION hochzaehlen, sonst bleibt die alte Fassung im Cache.
 
-const VERSION = 'orbsmash-v1.0.0';
+const VERSION = 'orbsmash-v1.1.0';
 const ASSETS = [
   './',
   './index.html',

@@ -8,10 +8,30 @@ Ein kleines Arcade-Spiel für den Browser: Unten fährt eine Schwebe-Kanone hin 
 
 - **Steuerung:** Finger auflegen und nach links oder rechts ziehen. Solange der Finger liegt, schießt die Kanone. Am PC: Maus gedrückt halten und ziehen oder Pfeiltasten.
 - **Münzen:** Platzende Kugeln lassen Münzen fallen, die fliegen automatisch zur Kanone. Am Levelende gibt es einen Bonus.
-- **Shop:** Feuerrate, Feuerkraft und Münzbonus aufrüsten. Nach 8 Feuerrate-Upgrades hat die Kanone zwei Rohre, nach 18 drei.
-- **Boss:** Jedes 5. Level kommt ein Boss. Er spuckt kleine Kugeln aus und stampft ab und zu auf den Boden. Die rote Markierung zeigt, wo er landet.
-- **Power-ups** (fallen manchmal aus großen Kugeln): Schild (fängt einen Treffer ab), Turbo (8 Sekunden fast doppelt so schnell schießen), Frost (5 Sekunden Zeitlupe für alle Kugeln).
+- **Shop:** Feuerrate (6 bis 50 Schuss pro Sekunde), Feuerkraft (ohne Obergrenze) und Münzbonus (ohne Obergrenze: bis +200 % je 10 %, danach je 5 %). Nach 8 Feuerrate-Upgrades hat die Kanone zwei Rohre, nach 18 drei, nach 35 vier.
+- **Bosse** (jedes 5. Level, drei Typen im Wechsel, jede Runde stärker). Ab halber Energie werden sie wütend und greifen schneller an:
+  - **Prisma** (Level 5, 20, 35 …): stampft dort auf den Boden, wo du gerade stehst. Die rote Markierung zeigt, wo er landet. Wütend schleudert er dabei kleine Kugeln los.
+  - **Zyklop** (Level 10, 25, 40 …): lädt kurz auf und schießt Salven auf dich, wütend 5 statt 3 Schuss.
+  - **Wächter** (Level 15, 30, 45 …): zwei kreisende Schilde fangen Schüsse ab, Strahlen kommen von oben (erst Warnlinie, dann Strahl), wütend drei auf einmal.
+- **Power-ups** (fallen manchmal aus großen Kugeln, Liste auch im Menü):
+
+  | Power-up | Wirkung |
+  |---|---|
+  | Schild | fängt einen Treffer ab |
+  | Turbo | 8 s fast doppelte Feuerrate |
+  | Laser | 6 s Dauerstrahl, schneidet durch alles darüber |
+  | Fächer | 8 s jeder Schuss dreifach im Fächer |
+  | Drohnen | 10 s zwei Helfer, die mitschießen |
+  | Raketen | 8 s zielsuchende Raketen mit kleiner Explosion |
+  | Frost | 5 s Zeitlupe für Kugeln, Boss und Boss-Geschosse |
+  | Goldrausch | 10 s doppelte Münzen |
+  | Nova | Druckwelle, trifft sofort alle Kugeln |
+
 - Fortschritt, Münzen und Upgrades bleiben auf dem Gerät gespeichert.
+
+## Balancing
+
+Wie stark ein Level ist, richtet sich nach einem simulierten Spieler, der jedes Level schafft und Feuerrate, Feuerkraft und Münzbonus kauft (`typicalDps` in `js/game.js`). Levels sind auf 75 % von dessen Schaden ausgelegt. Wer viel Münzbonus kauft oder öfter wiederholt, ist stärker und kommt leichter durch.
 
 ## Aufs iPhone (Homescreen, offline)
 

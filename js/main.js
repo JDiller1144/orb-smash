@@ -1,9 +1,9 @@
 // Menue, Shop, Speicherstand und Verbindung zwischen Oberflaeche und Spiel.
 
-import { Game, UPGRADES, fmtNum, isBossLevel } from './game.js';
+import { Game, UPGRADES, POWERS, fmtNum, bossInfo } from './game.js';
 import { sfx } from './audio.js';
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.0';
 const SAVE_KEY = 'orbsmash-save-v1';
 const DEFAULT = { level: 1, best: 1, coins: 0, up: { fire: 0, power: 0, coin: 0 }, sound: true, hintClosed: false };
 
@@ -67,7 +67,8 @@ function showMenu() {
 
 function renderMenu() {
   el.menuCoins.textContent = fmtNum(save.coins);
-  el.playSub.textContent = isBossLevel(save.level) ? `Level ${save.level} · BOSS` : `Level ${save.level}`;
+  const bi = bossInfo(save.level);
+  el.playSub.textContent = bi ? `Level ${save.level} · Boss ${bi.name}` : `Level ${save.level}`;
   el.best.textContent = `Rekord: Level ${save.best}`;
   el.sound.textContent = save.sound ? 'Ton: an' : 'Ton: aus';
   el.shop.innerHTML = '';
@@ -106,9 +107,9 @@ function startLevel() {
   sfx.init();
   hide(el.menu, el.result, el.pause);
   show(el.hud);
-  const boss = isBossLevel(save.level);
-  el.hudLevel.textContent = boss ? `Boss · Level ${save.level}` : `Level ${save.level}`;
-  el.hud.classList.toggle('boss', boss);
+  const bi = bossInfo(save.level);
+  el.hudLevel.textContent = bi ? `${bi.name} · Level ${save.level}` : `Level ${save.level}`;
+  el.hud.classList.toggle('boss', !!bi);
   el.hudCoins.textContent = fmtNum(save.coins);
   game.start(save.level, stats());
 }
@@ -174,6 +175,10 @@ const standalone = navigator.standalone === true || matchMedia('(display-mode: s
 if (isIOS && !standalone && !save.hintClosed) show(el.hint);
 
 $('version').textContent = 'v' + APP_VERSION;
+
+// Liste der Power-ups im Menue
+$('powers-list').innerHTML = Object.values(POWERS).map((p) =>
+  `<li><i style="--c:${p.col}"></i><b>${p.label}</b><span>${p.desc}${p.time ? ` (${p.time} s)` : ''}</span></li>`).join('');
 
 // Offline-Modus: Service Worker speichert alle Dateien auf dem Geraet.
 // Lokal (localhost) nur mit ?sw, damit beim Entwickeln nichts Altes im Cache klebt.

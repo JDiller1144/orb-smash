@@ -104,6 +104,30 @@ class Sfx {
     if (!this.ok('win')) return;
     [523, 659, 784, 1047, 1319].forEach((f, i) => this.tone(f, f, 0.28, 'triangle', 0.12, i * 0.09));
   }
+  laser() { if (this.ok('laser', 0.11)) this.tone(180 + Math.random() * 30, 140, 0.12, 'sawtooth', 0.035); }
+  charge() { if (this.ok('charge')) this.tone(300, 1200, 0.45, 'triangle', 0.08); }
+  bolt() {
+    if (!this.ok('bolt')) return;
+    this.tone(900, 300, 0.15, 'square', 0.07);
+    this.noise(0.1, 0.12, 2500);
+  }
+  beam() {
+    if (!this.ok('beam', 0.2)) return;
+    this.noise(0.6, 0.3, 1500);
+    this.tone(90, 60, 0.6, 'sawtooth', 0.12);
+  }
+  rocket() { if (this.ok('rocket', 0.08)) this.noise(0.15, 0.08, 4000); }
+  explode() {
+    if (!this.ok('explode', 0.05)) return;
+    this.noise(0.25, 0.22, 1600);
+    this.tone(220, 60, 0.2, 'sine', 0.15);
+  }
+  nova() {
+    if (!this.ok('nova')) return;
+    this.noise(0.8, 0.45, 5000);
+    this.tone(120, 900, 0.35, 'triangle', 0.18);
+    this.tone(1200, 200, 0.6, 'sine', 0.12, 0.1);
+  }
   buy() { if (this.ok('buy')) this.tone(660, 1100, 0.12, 'square', 0.05); }
   click() { if (this.ok('click')) this.tone(800, 800, 0.03, 'square', 0.035); }
 }
