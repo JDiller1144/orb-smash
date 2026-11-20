@@ -26,13 +26,18 @@
       <div id="hud-level">Level 1</div>
       <div class="bar"><div id="hud-bar"></div></div>
     </div>
-    <div class="pill"><i class="coin"></i><span id="hud-coins">0</span></div>
+    <div class="pill"><i id="hud-ico" class="coin"></i><span id="hud-coins">0</span></div>
   </header>
 
   <section id="menu" class="screen hidden">
     <div class="menu-inner">
       <h1 class="logo"><span>ORB</span><span>SMASH</span></h1>
-      <div class="wallet"><i class="coin"></i><span id="menu-coins">0</span></div>
+      <div class="mode-switch" role="tablist" aria-label="Spielmodus">
+        <button id="mode-normal" role="tab" class="on">Normal</button>
+        <button id="mode-ultra" role="tab">Ultra</button>
+      </div>
+
+      <div id="wallet" class="wallet"><i class="coin"></i><span id="menu-coins">0</span></div>
 
       <div id="install-hint" class="hint hidden">
         <p>Für den Homescreen: unten auf <b>Teilen</b> <span class="share"></span> tippen, dann <b>„Zum Home-Bildschirm“</b>. Danach läuft das Spiel auch offline.</p>
@@ -41,7 +46,13 @@
 
       <div id="shop" class="shop"></div>
 
-      <button id="btn-play" class="btn primary"><small id="play-sub">Level 1</small>SPIELEN</button>
+      <div id="ultra-card" class="ultra-card hidden">
+        <h3>Ultra-Modus</h3>
+        <ul id="ultra-facts"></ul>
+        <p id="ultra-best"></p>
+      </div>
+
+      <button id="btn-play" class="btn primary"><small id="play-sub">Level 1</small><span id="play-main">SPIELEN</span></button>
 
       <div class="menu-foot">
         <span id="best">Rekord: Level 1</span>

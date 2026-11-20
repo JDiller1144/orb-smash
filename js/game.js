@@ -6,13 +6,28 @@ import { sfx } from './audio.js';
 export const W = 400;
 const G = 700;                                    // Schwerkraft
 const TAU = Math.PI * 2;
-const RADII = [0, 16, 24, 33, 43];                // Kugelgroesse je Stufe (1 = klein, 4 = gross)
-const APEX = [0, 0.30, 0.40, 0.50, 0.58];         // Sprunghoehe je Stufe (Anteil am Spielfeld)
-const COLORS = [null, '#3cf2ff', '#7dff5a', '#ff4fd8', '#ffb13b'];
+const RADII = [0, 16, 24, 33, 43, 58];            // Kugelgroesse je Stufe (1 = klein, 4 = gross, 5 = Riese nur im Ultra-Modus)
+const APEX = [0, 0.30, 0.40, 0.50, 0.58, 0.64];   // Sprunghoehe je Stufe (Anteil am Spielfeld)
+const COLORS = [null, '#3cf2ff', '#7dff5a', '#ff4fd8', '#ffb13b', '#ff3b5c'];
 const BULLET_COLS = ['#8ffaff', '#fff36b', '#ffae3b', '#ff6bd5', '#c39bff'];
 const BARREL_OFFS = [null, [0], [-7, 7], [-11, 0, 11], [-15, -5, 5, 15]];
 const BULLET_SPEED = 1050;
 const MAX_BULLETS = 500;                          // Sicherheitsgrenze, damit das Handy nicht ueberlastet
+// Mehr als 70 sichtbare Schuesse pro Sekunde bringen nichts fuers Auge, kosten aber Leistung.
+// Darueber hinaus wird nicht oefter geschossen, sondern jeder Schuss entsprechend staerker.
+const EMIT_MAX = 70;
+
+// Ultra-Modus: eigener Spielmodus ohne Muenzen, zaehlt nicht fuers Level
+export const ULTRA = {
+  sps: 100,           // Schuss pro Sekunde (Turbo kommt noch obendrauf)
+  dmg: 1000,          // Schaden pro Schuss
+  slow: 0.6,          // dauerhafter Frost (etwas milder als das Power-up, sonst wird es zaeh)
+  shieldRegen: 5,     // Sekunden, bis der Schild nach einem Treffer wieder da ist
+  novaEvery: 10,      // automatische Nova alle 10 Sekunden
+  waveSecs: 15,       // alle 15 Sekunden eine neue Welle
+  baseHp: 300000,     // Leben einer Riesenkugel in Welle 1
+  growth: 1.15,       // +15 % Leben pro Welle
+};
 const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 
 // Power-ups: w = wie oft es faellt (Gewicht), time = Dauer in Sekunden (ohne time = sofort)
@@ -53,7 +68,7 @@ const baseCost = (k) => Math.round(10 + 8 * k + 1.5 * k * k);
 
 export const UPGRADES = {
   fire: {
-    name: 'Feuerrate', max: 55, cost: baseCost,              // 6/s bis 50/s
+    name: 'Feuerrate', max: Infinity, cost: baseCost,        // ab 6/s, ohne Obergrenze
     value: (k) => 6 + 0.8 * k,
     fmt: (v) => v.toFixed(1).replace(/\.0$/, '') + '/s',
   },
@@ -223,6 +238,7 @@ export class Game {
     this.flash = 0;
     this.laserOn = false;
     this.droneAcc = 0; this.rocketT = 0; this.rocketSide = 1;
+    this.ultra = null;                            // gesetzt, solange der Ultra-Modus laeuft
     Object.assign(this.player, { shield: false, inv: 0, alive: true });
   }
 
@@ -438,6 +454,58 @@ export class Game {
 
   begin() { this.state = 'playing'; }
 
+  // Ultra-Modus: alle Power-ups ausser Laser dauerhaft an, Riesenkugeln ohne Ende, keine Muenzen
+  startUltra() {
+    this.clearWorld();
+    this.level = 0;
+    this.stats = { sps: ULTRA.sps, dmg: ULTRA.dmg, coinMult: 0, fireLv: 40, powerLv: 40 };
+    this.plan = { ultra: true, boss: false, queue: [], total: 1, pops: 1, coinsT: 0, interval: 2.8 };
+    this.queue = [];
+    this.done = 0; this.coinsRun = 0; this.spawnT = 0; this.emptyT = 0;
+    this.fireAcc = 0.99; this.endT = 0; this.rootSeq = 0; this.spawnedAny = false;
+    this.coinPerPop = 0;
+    for (const k of ['turbo', 'spread', 'drones', 'rockets']) this.pw[k] = Infinity;
+    this.player.shield = true;
+    this.player.x = W / 2;
+    this.player.barrel = 0;
+    this.ultra = { wave: 1, waveT: 0, pops: 0, time: 0, shieldT: 0, novaT: ULTRA.novaEvery };
+    this.state = 'ready';
+    this.lastHud = -1;
+    this.emitHud(true);
+  }
+
+  updateUltra(dt) {
+    const u = this.ultra, p = this.player;
+    u.time += dt;
+    if (!p.shield) {                              // Schild laedt sich wieder auf
+      u.shieldT += dt;
+      if (u.shieldT >= ULTRA.shieldRegen) {
+        p.shield = true;
+        sfx.power();
+        this.rings.push({ x: p.x, y: this.ground - 18, r: 10, max: 60, t: 0, life: 0.4, col: POWERS.shield.col });
+      }
+    }
+    u.novaT -= dt;
+    if (u.novaT <= 0) { u.novaT = ULTRA.novaEvery; this.nova(); }
+    u.waveT += dt;
+    if (u.waveT >= ULTRA.waveSecs) {
+      u.waveT = 0;
+      u.wave++;
+      if (this.hooks.wave) this.hooks.wave(u.wave);
+      this.texts.push({ x: W / 2, y: this.H * 0.35, s: `WELLE ${u.wave}`, t: 0, life: 1.6, size: 36, col: '#ffe14d' });
+      sfx.warn();
+    }
+    // Nachschub: immer grosse Kugeln, mit jeder Welle mehr, schneller und zaeher
+    this.spawnT -= dt;
+    const maxRoots = Math.min(3 + Math.floor(u.wave / 3), 6);
+    if (this.orbs.length === 0 || (this.spawnT <= 0 && this.aliveRoots() < maxRoots)) {
+      const tier = Math.random() < (u.wave < 3 ? 0.5 : 0.7) ? 5 : 4;
+      const hp = Math.round(ULTRA.baseHp * ULTRA.growth ** (u.wave - 1) * (tier === 5 ? 1 : 0.55) * rand(0.85, 1.15));
+      this.spawnRoot({ tier, hp });
+      this.spawnT = Math.max(1.2, 2.8 - u.wave * 0.1);
+    }
+  }
+
   pause() {
     if (this.state !== 'playing' && this.state !== 'ready') return false;
     this.prev = this.state;
@@ -454,6 +522,7 @@ export class Game {
 
   progress() {
     if (!this.plan) return 0;
+    if (this.ultra) return this.ultra.waveT / ULTRA.waveSecs;
     if (this.boss) return 1 - Math.max(0, this.boss.hp) / this.boss.max;
     return this.plan.boss ? 1 : Math.min(1, this.done / this.plan.total);
   }
@@ -465,6 +534,13 @@ export class Game {
 
   finish(win) {
     if (this.state === 'over') return;
+    if (this.ultra) {
+      this.state = 'over';
+      this.input.down = false;
+      const u = this.ultra;
+      this.hooks.end({ ultra: true, wave: u.wave, pops: u.pops, secs: Math.round(u.time) });
+      return;
+    }
     const bonus = win ? Math.round(0.35 * this.plan.coinsT * this.stats.coinMult) : 0;
     const progress = win ? 1 : this.progress();
     this.state = 'over';
@@ -511,11 +587,16 @@ export class Game {
           this.fireLaser(dt);
           this.fireAcc = 0.99;
         } else {
-          this.fireAcc += dt * this.stats.sps * (this.pw.turbo > 0 ? 1.8 : 1);
+          // Ueber EMIT_MAX hinaus: nicht mehr Schuesse, sondern staerkere
+          const sps = this.stats.sps * (this.pw.turbo > 0 ? 1.8 : 1), emit = Math.min(sps, EMIT_MAX);
+          this.shotDmg = this.stats.dmg * (sps / emit);
+          this.fireAcc += dt * emit;
           while (this.fireAcc >= 1) { this.fireAcc -= 1; this.shoot(); }
         }
         if (this.pw.drones > 0) {
-          this.droneAcc += dt * this.stats.sps * 0.6;
+          const dsps = this.stats.sps * 0.6, emit = Math.min(dsps, EMIT_MAX / 3);
+          this.droneDmg = this.stats.dmg * (dsps / emit);
+          this.droneAcc += dt * emit;
           while (this.droneAcc >= 1) { this.droneAcc -= 1; this.droneShoot(); }
         }
         if (this.pw.rockets > 0) {
@@ -527,11 +608,12 @@ export class Game {
       }
       for (const k of TIMED) if (this.pw[k] > 0) this.pw[k] = Math.max(0, this.pw[k] - dt);
       p.inv = Math.max(0, p.inv - dt);
-      this.updateSpawns(dt);
+      if (this.ultra) this.updateUltra(dt);
+      else this.updateSpawns(dt);
     }
 
     if (st !== 'ready') {
-      const ts = this.pw.frost > 0 ? 0.3 : 1;
+      const ts = this.ultra ? ULTRA.slow : this.pw.frost > 0 ? 0.3 : 1;
       this.updateOrbs(wdt * ts);
       if (this.boss) this.updateBoss(wdt * ts);
       this.updateShots(wdt * ts);
@@ -582,8 +664,8 @@ export class Game {
     if (this.spawnT <= 0 && this.aliveRoots() < this.plan.maxRoots) this.spawnRoot();
   }
 
-  spawnRoot() {
-    const d = this.queue.shift(), id = ++this.rootSeq, r = RADII[d.tier];
+  spawnRoot(d = this.queue.shift()) {
+    const id = ++this.rootSeq, r = RADII[d.tier];
     const side = Math.random() < 0.5 ? -1 : 1;
     const o = this.makeOrb(d.tier, d.hp, id, side < 0 ? -r : W + r, this.top + r + 10 + Math.random() * 60);
     o.vx = -side * rand(60, 85);
@@ -628,16 +710,25 @@ export class Game {
     const i = this.orbs.indexOf(o);
     if (i < 0) return;
     this.orbs.splice(i, 1);
-    if (this.roots.has(o.root)) this.roots.set(o.root, this.roots.get(o.root) - 1);
+    const split = !silent && o.tier > 1;
+    if (this.roots.has(o.root)) {                 // zaehlt, wie viele Teile einer Kugel noch leben
+      const n = this.roots.get(o.root) - 1 + (split ? 2 : 0);
+      if (n > 0) this.roots.set(o.root, n); else this.roots.delete(o.root);
+    }
     const col = COLORS[o.tier];
     this.burst(o.x, o.y, col, 8 + o.tier * 5, 60 + o.tier * 40);
     this.rings.push({ x: o.x, y: o.y, r: o.r, max: o.r * 2.2, t: 0, life: 0.35, col });
     this.shake = Math.min(10, this.shake + o.tier * 0.9);
     if (silent) return;
     sfx.pop(o.tier);
-    this.dropCoin(o.x, o.y, this.coinPerPop);
-    if (o.tier >= 2 && this.caps.length < 2 && Math.random() < 0.09) this.dropCap(o.x, o.y);
-    if (o.tier > 1) {
+    if (this.ultra) {
+      this.ultra.pops++;
+      if (this.hooks.score) this.hooks.score(this.ultra.pops);
+    } else {
+      this.dropCoin(o.x, o.y, this.coinPerPop);
+      if (o.tier >= 2 && this.caps.length < 2 && Math.random() < 0.09) this.dropCap(o.x, o.y);
+    }
+    if (split) {
       const t = o.tier - 1, r = RADII[t], hp = Math.ceil(o.max / 2), sp = Math.max(55, Math.abs(o.vx));
       for (const s of [-1, 1]) {
         const c = this.makeOrb(t, hp, o.root, clamp(o.x + s * o.r * 0.4, r, W - r), Math.min(o.y, this.ground - r));
@@ -645,12 +736,11 @@ export class Game {
         c.vy = -this.bounceV(t) * 0.55;
         this.orbs.push(c);
       }
-      if (this.roots.has(o.root)) this.roots.set(o.root, this.roots.get(o.root) + 2);
     }
   }
 
   checkWin() {
-    if (this.queue.length || this.orbs.length || this.boss) return;
+    if (this.ultra || this.queue.length || this.orbs.length || this.boss) return;
     this.state = 'won';
     this.endT = 0;
     sfx.win();
@@ -840,17 +930,18 @@ export class Game {
     return f >= 35 ? 4 : f >= 18 ? 3 : f >= 8 ? 2 : 1;
   }
 
-  addBullet(x, y, angle) {
+  addBullet(x, y, angle, dmg) {
     if (this.bullets.length >= MAX_BULLETS) return;
-    this.bullets.push({ x, y, vx: Math.sin(angle) * BULLET_SPEED, vy: -Math.cos(angle) * BULLET_SPEED });
+    this.bullets.push({ x, y, vx: Math.sin(angle) * BULLET_SPEED, vy: -Math.cos(angle) * BULLET_SPEED, dmg });
   }
 
   shoot() {
     const p = this.player, n = this.barrels();
     const off = BARREL_OFFS[n][p.barrel++ % n];
     const y = this.ground - 46;
-    if (this.pw.spread > 0) { this.addBullet(p.x + off, y, -0.2); this.addBullet(p.x + off, y, 0); this.addBullet(p.x + off, y, 0.2); }
-    else this.addBullet(p.x + off, y, 0);
+    const d = this.shotDmg || this.stats.dmg;
+    if (this.pw.spread > 0) { this.addBullet(p.x + off, y, -0.2, d); this.addBullet(p.x + off, y, 0, d); this.addBullet(p.x + off, y, 0.2, d); }
+    else this.addBullet(p.x + off, y, 0, d);
     p.recoil = 1;
     sfx.shot();
   }
@@ -858,7 +949,7 @@ export class Game {
   dronePos(s) { return { x: this.player.x + s * 38, y: this.ground - 74 + Math.sin(this.time * 5 + s) * 3 }; }
 
   droneShoot() {
-    for (const s of [-1, 1]) { const d = this.dronePos(s); this.addBullet(d.x, d.y - 10, 0); }
+    for (const s of [-1, 1]) { const d = this.dronePos(s); this.addBullet(d.x, d.y - 10, 0, this.droneDmg || this.stats.dmg); }
   }
 
   fireLaser(dt) {
@@ -929,8 +1020,8 @@ export class Game {
   }
 
   nova() {
-    const p = this.player, dmg = this.dps() * 4;
-    this.flash = 0.3;
+    const p = this.player, dmg = this.dps() * (this.ultra ? 2 : 4);
+    this.flash = this.ultra ? 0.08 : 0.3;         // im Ultra-Modus kommt sie alle 10 s, da nur kurz aufblitzen
     this.shake = 10;
     this.rings.push({ x: p.x, y: this.ground - 20, r: 20, max: 900, t: 0, life: 0.7, col: '#ffffff' });
     this.rings.push({ x: p.x, y: this.ground - 20, r: 10, max: 600, t: 0, life: 0.55, col: '#b48cff' });
@@ -940,7 +1031,7 @@ export class Game {
   }
 
   updateBullets(dt) {
-    const B = this.bullets, dmg = this.stats.dmg;
+    const B = this.bullets;
     const bs = this.boss, sats = bs ? this.bossSats(bs) : [];
     for (let i = B.length - 1; i >= 0; i--) {
       const b = B[i];
@@ -952,12 +1043,12 @@ export class Game {
       }
       if (!hit && this.boss) {
         const B2 = this.boss, dx = b.x - B2.x, dy = b.y - B2.y;
-        if (dx * dx + dy * dy < B2.r * B2.r) { this.damageBoss(dmg, b.x, b.y); hit = true; }
+        if (dx * dx + dy * dy < B2.r * B2.r) { this.damageBoss(b.dmg, b.x, b.y); hit = true; }
       }
       if (!hit) {
         for (const o of this.orbs) {
           const dx = b.x - o.x, dy = b.y - o.y, rr = o.r + 3;
-          if (dx * dx + dy * dy < rr * rr) { this.damageOrb(o, dmg, b.x, b.y); hit = true; break; }
+          if (dx * dx + dy * dy < rr * rr) { this.damageOrb(o, b.dmg, b.x, b.y); hit = true; break; }
         }
       }
       if (hit) { B[i] = B[B.length - 1]; B.pop(); }
@@ -1068,6 +1159,7 @@ export class Game {
     if (p.shield) {
       p.shield = false;
       p.inv = 1.3;
+      if (this.ultra) this.ultra.shieldT = 0;     // im Ultra-Modus kommt er nach ein paar Sekunden wieder
       sfx.shield();
       this.rings.push({ x: p.x, y: this.ground - 16, r: 20, max: 90, t: 0, life: 0.45, col: POWERS.shield.col });
       if (o) {
@@ -1091,7 +1183,9 @@ export class Game {
   // ----- Effekte -----
 
   burst(x, y, col, n, sp) {
-    for (let i = 0; i < n && this.parts.length < 450; i++) {
+    const cap = this.ultra ? 280 : 450;           // im Ultra-Modus platzt so viel, dass weniger Funken reichen
+    if (this.ultra) n = Math.ceil(n / 2);
+    for (let i = 0; i < n && this.parts.length < cap; i++) {
       const a = Math.random() * TAU, v = sp * (0.3 + Math.random() * 0.7);
       this.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40, t: 0, life: 0.4 + Math.random() * 0.5, s: 2 + Math.random() * 3, col });
     }
@@ -1123,6 +1217,12 @@ export class Game {
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
     ctx.drawImage(this.bg, 0, 0);
+    if (this.ultra) {                             // Ultra: leicht gluehender Himmel
+      ctx.globalAlpha = 0.1 + 0.04 * Math.sin(this.time * 2);
+      ctx.fillStyle = '#ff2a6d';
+      ctx.fillRect(0, 0, this.cv.width, this.cv.height);
+      ctx.globalAlpha = 1;
+    }
     const sx = this.shake ? (Math.random() * 2 - 1) * this.shake * 0.5 : 0;
     const sy = this.shake ? (Math.random() * 2 - 1) * this.shake * 0.5 : 0;
     ctx.setTransform(k, 0, 0, k, this.offX * this.dpr + sx * k, sy * k);
@@ -1541,19 +1641,25 @@ export class Game {
         ctx.fillText(P.label, 62, cy + 10.5);
         cy += 24;
       };
-      if (this.player.shield) chip('shield', 1);
-      for (const k of TIMED) if (this.pw[k] > 0) chip(k, this.pw[k] / POWERS[k].time);
+      if (this.ultra) {                         // Ultra: nur Schild-Ladung und Nova-Countdown, der Rest ist eh immer an
+        chip('shield', this.player.shield ? 1 : this.ultra.shieldT / ULTRA.shieldRegen);
+        chip('nova', 1 - this.ultra.novaT / ULTRA.novaEvery);
+      } else {
+        if (this.player.shield) chip('shield', 1);
+        for (const k of TIMED) if (this.pw[k] > 0) chip(k, this.pw[k] / POWERS[k].time);
+      }
     }
 
     if (this.state === 'ready') {
       const bi = this.plan && this.plan.boss ? BOSSES[this.plan.bossType] : null;
       ctx.font = `900 34px ${FONT}`;
-      ctx.fillStyle = bi ? bi.col : '#ffffff';
-      ctx.fillText(bi ? `BOSS: ${bi.name}` : `LEVEL ${this.level}`, W / 2, this.ground - 220);
-      if (bi) {
+      ctx.fillStyle = this.ultra ? '#ffe14d' : bi ? bi.col : '#ffffff';
+      ctx.fillText(this.ultra ? 'ULTRA-MODUS' : bi ? `BOSS: ${bi.name}` : `LEVEL ${this.level}`, W / 2, this.ground - 220);
+      const sub = this.ultra ? '100 Schuss/s · 1000 Schaden · keine Münzen' : bi ? bi.desc : '';
+      if (sub) {
         ctx.font = `700 15px ${FONT}`;
-        ctx.fillStyle = '#ffd0f3';
-        ctx.fillText(bi.desc, W / 2, this.ground - 190);
+        ctx.fillStyle = this.ultra ? '#fff1b0' : '#ffd0f3';
+        ctx.fillText(sub, W / 2, this.ground - 190);
       }
       ctx.globalAlpha = 0.55 + 0.45 * Math.sin(this.time * 4);
       ctx.font = `700 18px ${FONT}`;

@@ -1,18 +1,28 @@
 // Menue, Shop, Speicherstand und Verbindung zwischen Oberflaeche und Spiel.
 
-import { Game, UPGRADES, POWERS, fmtNum, bossInfo } from './game.js';
+import { Game, UPGRADES, POWERS, ULTRA, fmtNum, bossInfo } from './game.js';
 import { sfx } from './audio.js';
 
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 const SAVE_KEY = 'orbsmash-save-v1';
-const DEFAULT = { level: 1, best: 1, coins: 0, up: { fire: 0, power: 0, coin: 0 }, sound: true, hintClosed: false };
+const DEFAULT = {
+  level: 1, best: 1, coins: 0, up: { fire: 0, power: 0, coin: 0 }, sound: true, hintClosed: false,
+  ultra: false,                                   // ist der Ultra-Modus im Menue ausgewaehlt?
+  ultraBest: { pops: 0, wave: 0 },                // Rekord im Ultra-Modus
+};
 
 // ----- Speicherstand (bleibt auf dem Geraet, auch offline) -----
 
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(SAVE_KEY));
-    if (s && typeof s === 'object') return { ...DEFAULT, ...s, up: { ...DEFAULT.up, ...(s.up || {}) } };
+    if (s && typeof s === 'object') {
+      return {
+        ...DEFAULT, ...s,
+        up: { ...DEFAULT.up, ...(s.up || {}) },
+        ultraBest: { ...DEFAULT.ultraBest, ...(s.ultraBest || {}) },
+      };
+    }
   } catch (_) { /* kein Speicher verfuegbar */ }
   return JSON.parse(JSON.stringify(DEFAULT));
 }
@@ -25,8 +35,10 @@ const show = (...els) => els.forEach((e) => e.classList.remove('hidden'));
 const hide = (...els) => els.forEach((e) => e.classList.add('hidden'));
 
 const el = {
-  hud: $('hud'), hudLevel: $('hud-level'), hudBar: $('hud-bar'), hudCoins: $('hud-coins'),
-  menu: $('menu'), menuCoins: $('menu-coins'), shop: $('shop'), playSub: $('play-sub'),
+  hud: $('hud'), hudLevel: $('hud-level'), hudBar: $('hud-bar'), hudCoins: $('hud-coins'), hudIco: $('hud-ico'),
+  menu: $('menu'), menuCoins: $('menu-coins'), wallet: $('wallet'), shop: $('shop'), playSub: $('play-sub'),
+  playMain: $('play-main'), play: $('btn-play'), ultraCard: $('ultra-card'), ultraBest: $('ultra-best'),
+  modeNormal: $('mode-normal'), modeUltra: $('mode-ultra'),
   best: $('best'), sound: $('btn-sound'), hint: $('install-hint'),
   pause: $('pause'), result: $('result'),
   resTitle: $('res-title'), resText: $('res-text'), resCoins: $('res-coins'),
@@ -49,9 +61,13 @@ const stats = () => ({
   powerLv: save.up.power,
 });
 
+let playingUltra = false;
+
 const game = new Game($('cv'), {
   hud(progress) { el.hudBar.style.width = (progress * 100).toFixed(1) + '%'; },
   coin(v) { save.coins += v; el.hudCoins.textContent = fmtNum(save.coins); },
+  score(pops) { el.hudCoins.textContent = fmtNum(pops); },
+  wave(w) { el.hudLevel.textContent = `Ultra · Welle ${w}`; },
   end(res) { showResult(res); },
 });
 window.orbSmash = game; // zum Ausprobieren in der Browser-Konsole
@@ -66,11 +82,30 @@ function showMenu() {
 }
 
 function renderMenu() {
+  const ultra = save.ultra;
+  el.modeNormal.classList.toggle('on', !ultra);
+  el.modeUltra.classList.toggle('on', ultra);
+  el.modeNormal.setAttribute('aria-selected', String(!ultra));
+  el.modeUltra.setAttribute('aria-selected', String(ultra));
+  el.menu.classList.toggle('ultra', ultra);
+  el.shop.classList.toggle('hidden', ultra);
+  el.wallet.classList.toggle('hidden', ultra);
+  el.ultraCard.classList.toggle('hidden', !ultra);
   el.menuCoins.textContent = fmtNum(save.coins);
-  const bi = bossInfo(save.level);
-  el.playSub.textContent = bi ? `Level ${save.level} · Boss ${bi.name}` : `Level ${save.level}`;
   el.best.textContent = `Rekord: Level ${save.best}`;
   el.sound.textContent = save.sound ? 'Ton: an' : 'Ton: aus';
+
+  if (ultra) {
+    el.playMain.textContent = 'ULTRA';
+    const b = save.ultraBest;
+    el.playSub.textContent = b.pops ? `Rekord: ${fmtNum(b.pops)} Kugeln · Welle ${b.wave}` : 'Noch kein Rekord';
+    el.ultraBest.textContent = b.pops ? `Dein Rekord: ${fmtNum(b.pops)} Kugeln, Welle ${b.wave}` : 'Noch kein Rekord, leg los!';
+    return;
+  }
+
+  el.playMain.textContent = 'SPIELEN';
+  const bi = bossInfo(save.level);
+  el.playSub.textContent = bi ? `Level ${save.level} · Boss ${bi.name}` : `Level ${save.level}`;
   el.shop.innerHTML = '';
   for (const [key, u] of Object.entries(UPGRADES)) {
     const lv = save.up[key], maxed = lv >= u.max, cost = u.cost(lv);
@@ -103,18 +138,53 @@ el.shop.addEventListener('click', (e) => {
   renderMenu();
 });
 
-function startLevel() {
+function setMode(ultra) {
+  if (save.ultra === ultra) return;
+  save.ultra = ultra;
+  persist();
+  sfx.init();
+  sfx.click();
+  renderMenu();
+}
+
+function startGame() {
   sfx.init();
   hide(el.menu, el.result, el.pause);
   show(el.hud);
+  playingUltra = save.ultra;
+  el.hud.classList.toggle('ultra', playingUltra);
+  if (playingUltra) {
+    el.hud.classList.remove('boss');
+    el.hudLevel.textContent = 'Ultra · Welle 1';
+    el.hudIco.className = 'orbico';
+    el.hudCoins.textContent = '0';
+    game.startUltra();
+    return;
+  }
   const bi = bossInfo(save.level);
   el.hudLevel.textContent = bi ? `${bi.name} · Level ${save.level}` : `Level ${save.level}`;
   el.hud.classList.toggle('boss', !!bi);
+  el.hudIco.className = 'coin';
   el.hudCoins.textContent = fmtNum(save.coins);
   game.start(save.level, stats());
 }
 
 function showResult(res) {
+  if (res.ultra) {
+    const b = save.ultraBest, record = res.pops > b.pops;
+    if (record) save.ultraBest = { pops: res.pops, wave: res.wave };
+    persist();
+    el.resTitle.textContent = record ? 'Neuer Rekord!' : 'Ultra vorbei!';
+    el.resTitle.className = record ? 'win' : 'lose';
+    el.resText.textContent = `Welle ${res.wave} erreicht, ${res.secs} Sekunden durchgehalten.`
+      + (record || !b.pops ? '' : ` Rekord: ${fmtNum(b.pops)} Kugeln (Welle ${b.wave}).`);
+    el.resCoins.innerHTML = `<i class="orbico"></i> ${fmtNum(res.pops)} <small>Kugeln zerschossen · keine Münzen im Ultra-Modus</small>`;
+    show(el.resRetry);
+    el.resNext.textContent = 'Menü';
+    hide(el.hud);
+    show(el.result);
+    return;
+  }
   if (res.win) {
     save.coins += res.bonus;
     save.level = res.level + 1;
@@ -140,11 +210,13 @@ function pauseGame() {
 
 // ----- Knoepfe -----
 
-$('btn-play').addEventListener('click', startLevel);
+el.play.addEventListener('click', startGame);
+el.modeNormal.addEventListener('click', () => setMode(false));
+el.modeUltra.addEventListener('click', () => setMode(true));
 $('btn-pause').addEventListener('click', () => { sfx.click(); pauseGame(); });
 $('btn-resume').addEventListener('click', () => { sfx.init(); hide(el.pause); game.resume(); });
 $('btn-quit').addEventListener('click', () => { persist(); showMenu(); });
-el.resRetry.addEventListener('click', startLevel);
+el.resRetry.addEventListener('click', startGame);
 el.resNext.addEventListener('click', () => { sfx.click(); showMenu(); });
 el.sound.addEventListener('click', () => {
   save.sound = !save.sound;
@@ -155,8 +227,8 @@ el.sound.addEventListener('click', () => {
   renderMenu();
 });
 $('btn-reset').addEventListener('click', () => {
-  if (!confirm('Wirklich den ganzen Fortschritt löschen? Level, Münzen und Upgrades sind dann weg.')) return;
-  save = { ...JSON.parse(JSON.stringify(DEFAULT)), sound: save.sound, hintClosed: save.hintClosed };
+  if (!confirm('Wirklich den ganzen Fortschritt löschen? Level, Münzen, Upgrades und der Ultra-Rekord sind dann weg.')) return;
+  save = { ...JSON.parse(JSON.stringify(DEFAULT)), sound: save.sound, hintClosed: save.hintClosed, ultra: save.ultra };
   persist();
   renderMenu();
 });
@@ -175,6 +247,16 @@ const standalone = navigator.standalone === true || matchMedia('(display-mode: s
 if (isIOS && !standalone && !save.hintClosed) show(el.hint);
 
 $('version').textContent = 'v' + APP_VERSION;
+
+// Ultra-Infokarte
+$('ultra-facts').innerHTML = [
+  `<b>${ULTRA.sps}</b> Schuss/s`,
+  `<b>${ULTRA.dmg.toLocaleString('de-DE')}</b> Schaden pro Schuss`,
+  'Turbo, Fächer, Drohnen, Raketen und Frost immer an',
+  `Schild lädt nach ${ULTRA.shieldRegen} s wieder auf, Nova alle ${ULTRA.novaEvery} s`,
+  'Riesenkugeln ohne Ende, jede Welle zäher',
+  'Keine Münzen, zählt nicht fürs Level',
+].map((t) => `<li>${t}</li>`).join('');
 
 // Liste der Power-ups im Menue
 $('powers-list').innerHTML = Object.values(POWERS).map((p) =>

@@ -225,6 +225,66 @@ button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulat
 .howto { text-align: center; font-size: 13px; line-height: 1.45; color: var(--muted); padding: 0 8px; }
 .version { text-align: center; font-size: 11px; color: rgba(169, 155, 214, 0.5); }
 
+/* ---------- Ultra-Modus ---------- */
+
+.mode-switch {
+  align-self: center;
+  display: flex;
+  padding: 4px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(20, 8, 50, 0.75);
+}
+.mode-switch button {
+  min-width: 110px; height: 40px;
+  border: 0; border-radius: 10px;
+  background: none;
+  font-size: 16px; font-weight: 800; letter-spacing: 1px;
+  color: var(--muted);
+}
+.mode-switch button.on { background: rgba(160, 130, 255, 0.28); color: var(--text); }
+#mode-ultra.on {
+  background: linear-gradient(135deg, #ffd23f, #ff3b5c);
+  color: #2a0710;
+  box-shadow: 0 0 18px rgba(255, 90, 80, 0.5);
+}
+
+.ultra-card {
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 180, 80, 0.45);
+  background: linear-gradient(160deg, rgba(70, 20, 30, 0.88), rgba(40, 10, 50, 0.88));
+}
+.ultra-card h3 {
+  margin: 0 0 8px;
+  font-size: 20px; font-weight: 900; font-style: italic; letter-spacing: 1px;
+  color: #ffd23f;
+  text-shadow: 0 0 14px rgba(255, 140, 60, 0.6);
+}
+.ultra-card ul { margin: 0; padding: 0 0 0 18px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; line-height: 1.35; }
+.ultra-card li b { color: #ffd23f; }
+.ultra-card p { margin: 10px 0 0; font-size: 14px; font-weight: 800; color: #ffe9a8; }
+
+#menu.ultra #btn-play {
+  background: linear-gradient(135deg, #ffd23f, #ff3b5c 60%, #b02bff);
+  box-shadow: 0 0 30px rgba(255, 80, 80, 0.55), 0 4px 0 #8a1a3a;
+}
+
+#hud.ultra #hud-level { color: #ffd23f; }
+#hud.ultra #hud-bar { background: linear-gradient(90deg, #ffd23f, #ff3b5c); box-shadow: 0 0 10px rgba(255, 120, 60, 0.6); }
+
+/* kleine Kugel als Zaehler-Symbol im Ultra-Modus */
+.orbico {
+  display: inline-block;
+  width: 1em; height: 1em;
+  vertical-align: -0.14em;
+  margin-right: 0.3em;
+  border-radius: 50%;
+  border: 2px solid #ff3b5c;
+  background: radial-gradient(circle at 35% 35%, rgba(255, 59, 92, 0.6), #1a0630 70%);
+  box-shadow: 0 0 6px rgba(255, 59, 92, 0.7);
+}
+
 .powers {
   border: 1px solid var(--line);
   border-radius: 14px;
