@@ -957,9 +957,11 @@ export class Game {
   }
 
   fireLaser(dt) {
-    const p = this.player, d = this.dps() * 2.2 * dt, lx = p.x;
+    // Im Ultra-Modus doppelter Schaden. Trifft jede Kugel, die den Strahl beruehrt, auch wenn sie
+    // erst halb im Bild ist (entering).
+    const p = this.player, d = this.dps() * 2.2 * (this.ultra ? 2 : 1) * dt, lx = p.x;
     for (const o of this.orbs.slice()) {
-      if (!o.entering && Math.abs(o.x - lx) < o.r + 8 && o.y < this.ground) this.damageOrb(o, d, lx, o.y + o.r * 0.8, 0.25);
+      if (Math.abs(o.x - lx) < o.r + 8 && o.y < this.ground) this.damageOrb(o, d, lx, o.y + o.r * 0.8, 0.25);
     }
     const b = this.boss;
     if (b && Math.abs(b.x - lx) < b.r + 8) this.damageBoss(d, lx, b.y + b.r * 0.8, 0.25);

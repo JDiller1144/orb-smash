@@ -3,7 +3,7 @@
 import { Game, UPGRADES, POWERS, ULTRA, fmtNum, bossInfo } from './game.js';
 import { sfx } from './audio.js';
 
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.3.1';
 const SAVE_KEY = 'orbsmash-save-v1';
 const DEFAULT = {
   level: 1, best: 1, coins: 0, up: { fire: 0, power: 0, coin: 0 }, sound: true, hintClosed: false,
