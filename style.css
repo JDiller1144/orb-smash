@@ -327,6 +327,35 @@ button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulat
 .res-coins small { display: block; font-size: 13px; color: var(--muted); font-weight: 600; }
 .row { display: flex; gap: 10px; }
 
+/* ---------- Spielstand-Fenster ---------- */
+
+#savestate { align-items: flex-start; }       /* hoher Inhalt: oben anfangen, damit alles scrollbar bleibt */
+.save-panel { text-align: left; gap: 10px; margin: auto 0; }
+.save-panel h2 { text-align: center; }
+.save-panel .mode-switch button { font-size: 15px; }
+.sv-pane { display: flex; flex-direction: column; gap: 9px; }
+.sv-help { font-size: 13px; }
+.sv-help b { color: var(--text); }
+.sv-row { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 15px; }
+.sv-row > span { width: 84px; flex: none; }
+.save-panel input, .save-panel select, .save-panel textarea {
+  font: inherit; font-size: 16px;                 /* unter 16px zoomt Safari beim Antippen */
+  color: var(--text);
+  background: rgba(10, 3, 30, 0.7);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  -webkit-user-select: text; user-select: text;
+}
+.save-panel input { flex: 1; min-width: 0; }
+.save-panel select { flex: none; padding: 8px 4px; }
+.save-panel textarea { width: 100%; resize: none; font-family: ui-monospace, Menlo, monospace; font-size: 13px; word-break: break-all; }
+.sv-preview { font-size: 13px; line-height: 1.5; color: var(--muted); background: rgba(10, 3, 30, 0.45); border-radius: 12px; padding: 8px 10px; }
+.sv-preview b { color: var(--text); }
+.sv-preview .bad { color: #ff8ae6; }
+.sv-msg { min-height: 1em; text-align: center; font-weight: 800; color: #9dff8a !important; }
+.sv-msg.bad { color: #ff8ae6 !important; }
+
 #rotate { display: none; z-index: 50; background: var(--bg); font-size: 20px; font-weight: 700; text-align: center; }
 @media (orientation: landscape) and (pointer: coarse) and (max-height: 540px) {
   #rotate { display: flex; }

@@ -3,7 +3,7 @@
 import { Game, UPGRADES, POWERS, ULTRA, fmtNum, bossInfo } from './game.js';
 import { sfx } from './audio.js';
 
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.3.0';
 const SAVE_KEY = 'orbsmash-save-v1';
 const DEFAULT = {
   level: 1, best: 1, coins: 0, up: { fire: 0, power: 0, coin: 0 }, sound: true, hintClosed: false,
@@ -232,6 +232,170 @@ $('btn-reset').addEventListener('click', () => {
   persist();
   renderMenu();
 });
+// ----- Spielstand: wiederherstellen (aus dem, was man im alten Spiel gesehen hat) und als Code sichern -----
+
+// "1B", "3M", "1,4K", "1.000.000", "5005 %", "1126/s" -> Zahl (NaN, wenn unlesbar)
+function parseAmount(txt) {
+  const t = String(txt || '').trim().toLowerCase().replace(/\s+/g, '').replace(/%|\/s$/g, '').replace(/^\+/, '');
+  const m = t.match(/^([\d.,]+)(k|tsd|m|mio|b|mrd)?$/);
+  if (!m) return NaN;
+  let num = m[1];
+  if (/^\d{1,3}([.,]\d{3}){2,}$/.test(num) || (!m[2] && /^\d{1,3}\.\d{3}$/.test(num))) num = num.replace(/[.,]/g, ''); // Tausenderpunkte
+  else num = num.replace(',', '.');
+  const v = parseFloat(num);
+  if (!isFinite(v)) return NaN;
+  const mult = { k: 1e3, tsd: 1e3, m: 1e6, mio: 1e6, b: 1e9, mrd: 1e9 }[m[2]] || 1;
+  return v * mult;
+}
+
+const MAX_LV = 1e7;
+// kleinste Stufe k mit f(k) >= x (f steigt mit k)
+function firstAtLeast(f, x) {
+  let lo = 0, hi = MAX_LV;
+  if (f(hi) < x) return hi;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (f(mid) >= x) hi = mid; else lo = mid + 1; }
+  return lo;
+}
+
+// Anzeigewert (Feuerrate in /s, Feuerkraft, Muenzbonus in %) -> Anzahl Kaeufe
+function levelFromValue(key, v) {
+  const u = UPGRADES[key];
+  if (key === 'coin') v = 1 + v / 100;
+  const k = firstAtLeast(u.value, v);
+  return k > 0 && Math.abs(u.value(k - 1) - v) <= Math.abs(u.value(k) - v) ? k - 1 : k;
+}
+
+// Preis auf dem Kauf-Knopf ("3M") -> erste Stufe, bei der genau dieser Preis angezeigt wird
+function levelFromCost(key, price) {
+  const u = UPGRADES[key], target = fmtNum(price);
+  for (let k = firstAtLeast(u.cost, price * 0.5); k < MAX_LV && u.cost(k) <= price * 2; k++) {
+    if (fmtNum(u.cost(k)) === target) return k;
+  }
+  return -1;
+}
+
+const svEl = {
+  screen: $('savestate'), restore: $('sv-restore'), codePane: $('sv-code-pane'),
+  tabRestore: $('sv-tab-restore'), tabCode: $('sv-tab-code'),
+  level: $('sv-level'), coins: $('sv-coins'), preview: $('sv-preview'), msg: $('sv-msg'),
+  codeOut: $('sv-code-out'), codeIn: $('sv-code-in'),
+};
+const UP_KEYS = ['fire', 'power', 'coin'];
+
+function svMsg(text, bad) { svEl.msg.textContent = text; svEl.msg.classList.toggle('bad', !!bad); }
+
+// liest das Formular und rechnet alles hoch; liefert den neuen Spielstand oder eine Fehlermeldung
+function readRestore() {
+  const level = Math.round(parseAmount(svEl.level.value));
+  const coins = Math.round(parseAmount(svEl.coins.value));
+  if (!(level >= 1)) return { err: 'Level fehlt oder ist unlesbar.' };
+  if (!(coins >= 0)) return { err: 'Münzen fehlen oder sind unlesbar.' };
+  const up = {};
+  for (const key of UP_KEYS) {
+    const mode = $(`sv-${key}-mode`).value, v = parseAmount($(`sv-${key}`).value);
+    const name = UPGRADES[key].name;
+    if (!isFinite(v) || v < 0) return { err: `${name}: Wert fehlt oder ist unlesbar.` };
+    const k = mode === 'cost' ? levelFromCost(key, v) : levelFromValue(key, v);
+    if (k < 0) return { err: `${name}: Diesen Preis gibt es so nicht. Genau so eintippen, wie er auf dem Knopf steht.` };
+    up[key] = k;
+  }
+  return { level, coins, up };
+}
+
+function renderPreview() {
+  const r = readRestore();
+  if (r.err) { svEl.preview.innerHTML = `<span class="bad">${r.err}</span>`; return r; }
+  const line = (key) => {
+    const u = UPGRADES[key], k = r.up[key];
+    const shown = key === 'power' ? u.value(k).toLocaleString('de-DE') : u.fmt(u.value(k)); // Feuerkraft genau, nicht "1.4K"
+    return `${u.name}: <b>${shown}</b> (${k.toLocaleString('de-DE')}× gekauft, nächster Preis ${fmtNum(u.cost(k))})`;
+  };
+  svEl.preview.innerHTML = [
+    `Level <b>${r.level}</b> · <b>${r.coins.toLocaleString('de-DE')}</b> Münzen`,
+    ...UP_KEYS.map(line),
+  ].join('<br>');
+  return r;
+}
+
+// aktueller Spielstand ins Formular und als Code
+function fillSave() {
+  svEl.level.value = save.level;
+  svEl.coins.value = Math.floor(save.coins);
+  for (const key of UP_KEYS) {
+    const v = UPGRADES[key].value(save.up[key]);
+    $(`sv-${key}-mode`).value = 'value';
+    $(`sv-${key}`).value = key === 'coin' ? Math.round((v - 1) * 100) : +v.toFixed(1);
+  }
+  renderPreview();
+  svEl.codeOut.value = makeCode();
+}
+
+function makeCode() {
+  const d = { v: 1, l: save.level, b: save.best, c: Math.floor(save.coins), u: save.up, x: save.ultraBest };
+  return 'OS1-' + btoa(JSON.stringify(d));
+}
+
+function readCode(txt) {
+  try {
+    const t = String(txt).replace(/\s+/g, '');
+    if (!t.startsWith('OS1-')) return null;
+    const d = JSON.parse(atob(t.slice(4)));
+    const int = (n) => (Number.isFinite(n) && n >= 0 ? Math.floor(n) : null);
+    const up = d.u || {};
+    const r = { level: int(d.l), best: int(d.b), coins: int(d.c), up: { fire: int(up.fire), power: int(up.power), coin: int(up.coin) } };
+    if (!r.level || r.coins === null || Object.values(r.up).some((v) => v === null)) return null;
+    r.ultraBest = d.x && int(d.x.pops) !== null ? { pops: int(d.x.pops), wave: int(d.x.wave) || 0 } : null;
+    return r;
+  } catch (_) { return null; }
+}
+
+function applySave(r) {
+  save.level = r.level;
+  save.best = Math.max(r.best || 0, r.level);
+  save.coins = r.coins;
+  save.up = { ...r.up };
+  if (r.ultraBest) save.ultraBest = r.ultraBest;
+  persist();
+  renderMenu();
+  fillSave();
+}
+
+function svTab(code) {
+  svEl.tabRestore.classList.toggle('on', !code);
+  svEl.tabCode.classList.toggle('on', code);
+  svEl.restore.classList.toggle('hidden', code);
+  svEl.codePane.classList.toggle('hidden', !code);
+  svMsg('');
+}
+
+$('btn-save').addEventListener('click', () => { sfx.init(); sfx.click(); fillSave(); svTab(false); show(svEl.screen); });
+$('sv-close').addEventListener('click', () => { sfx.click(); hide(svEl.screen); });
+svEl.tabRestore.addEventListener('click', () => svTab(false));
+svEl.tabCode.addEventListener('click', () => { svEl.codeOut.value = makeCode(); svTab(true); });
+svEl.restore.addEventListener('input', () => { renderPreview(); svMsg(''); });
+svEl.restore.addEventListener('change', () => renderPreview());
+$('sv-apply').addEventListener('click', () => {
+  const r = renderPreview();
+  if (r.err) { svMsg(r.err, true); return; }
+  if (!confirm('Spielstand wirklich übernehmen? Der jetzige wird überschrieben.')) return;
+  applySave(r);
+  svMsg('Spielstand übernommen ✓');
+});
+$('sv-copy').addEventListener('click', async () => {
+  const code = makeCode();
+  svEl.codeOut.value = code;
+  try { await navigator.clipboard.writeText(code); svMsg('Code kopiert ✓'); }
+  catch (_) { svEl.codeOut.select(); svMsg('Code markiert, jetzt kopieren.'); }
+});
+$('sv-load').addEventListener('click', () => {
+  const r = readCode(svEl.codeIn.value);
+  if (!r) { svMsg('Der Code ist ungültig.', true); return; }
+  if (!confirm(`Spielstand laden: Level ${r.level}, ${fmtNum(r.coins)} Münzen? Der jetzige wird überschrieben.`)) return;
+  applySave(r);
+  svEl.codeIn.value = '';
+  svMsg('Spielstand geladen ✓');
+});
+
 $('hint-close').addEventListener('click', () => { save.hintClosed = true; persist(); hide(el.hint); });
 
 // App in den Hintergrund (Homebutton, Anruf): automatisch pausieren und speichern
@@ -252,7 +416,7 @@ $('version').textContent = 'v' + APP_VERSION;
 $('ultra-facts').innerHTML = [
   `<b>${ULTRA.sps}</b> Schuss/s`,
   `<b>${ULTRA.dmg.toLocaleString('de-DE')}</b> Schaden pro Schuss`,
-  'Turbo, Fächer, Drohnen, Raketen und Frost immer an',
+  'Turbo, Fächer, Drohnen, Raketen und Frost immer an, ab und zu fällt ein Laser',
   `Schild lädt nach ${ULTRA.shieldRegen} s wieder auf, Nova alle ${ULTRA.novaEvery} s`,
   'Riesenkugeln ohne Ende, jede Welle zäher',
   'Keine Münzen, zählt nicht fürs Level',

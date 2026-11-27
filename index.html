@@ -57,6 +57,7 @@
       <div class="menu-foot">
         <span id="best">Rekord: Level 1</span>
         <button id="btn-sound" class="link">Ton: an</button>
+        <button id="btn-save" class="link">Spielstand</button>
         <button id="btn-reset" class="link">Zurücksetzen</button>
       </div>
       <div class="howto">Finger auflegen und ziehen: Die Kanone fährt mit und schießt. Kugeln zerfallen beim Platzen in kleinere. Nicht berühren lassen! Jedes 5. Level kommt ein Boss.</div>
@@ -85,6 +86,52 @@
         <button id="res-retry" class="btn">Nochmal</button>
         <button id="res-next" class="btn primary">Weiter</button>
       </div>
+    </div>
+  </section>
+
+  <section id="savestate" class="screen hidden">
+    <div class="panel save-panel">
+      <h2>Spielstand</h2>
+      <div class="mode-switch" role="tablist" aria-label="Spielstand">
+        <button id="sv-tab-restore" role="tab" class="on">Wiederherstellen</button>
+        <button id="sv-tab-code" role="tab">Code</button>
+      </div>
+
+      <div id="sv-restore" class="sv-pane">
+        <p class="sv-help">Trag ein, was du in deinem alten Spiel gesehen hast. Abkürzungen wie <b>1B</b>, <b>3M</b> oder <b>1,4K</b> gehen auch.</p>
+        <label class="sv-row"><span>Level</span><input id="sv-level" inputmode="numeric" autocomplete="off"></label>
+        <label class="sv-row"><span>Münzen</span><input id="sv-coins" inputmode="decimal" autocomplete="off"></label>
+        <div class="sv-row">
+          <span>Feuerrate</span>
+          <select id="sv-fire-mode" aria-label="Feuerrate: Wert oder Preis"><option value="value">Wert /s</option><option value="cost">Preis</option></select>
+          <input id="sv-fire" inputmode="decimal" autocomplete="off" aria-label="Feuerrate">
+        </div>
+        <div class="sv-row">
+          <span>Feuerkraft</span>
+          <select id="sv-power-mode" aria-label="Feuerkraft: Wert oder Preis"><option value="value">Wert</option><option value="cost">Preis</option></select>
+          <input id="sv-power" inputmode="decimal" autocomplete="off" aria-label="Feuerkraft">
+        </div>
+        <div class="sv-row">
+          <span>Münzbonus</span>
+          <select id="sv-coin-mode" aria-label="Münzbonus: Wert oder Preis"><option value="value">Wert %</option><option value="cost">Preis</option></select>
+          <input id="sv-coin" inputmode="decimal" autocomplete="off" aria-label="Münzbonus">
+        </div>
+        <p class="sv-help">„Preis“ heißt: der Preis auf dem Kauf-Knopf. Das Spiel nimmt dann die erste Stufe, bei der genau dieser Preis angezeigt wird.</p>
+        <div id="sv-preview" class="sv-preview"></div>
+        <button id="sv-apply" class="btn primary">Übernehmen</button>
+      </div>
+
+      <div id="sv-code-pane" class="sv-pane hidden">
+        <p class="sv-help">Dein Spielstand als Code. Kopier ihn dir z.&nbsp;B. in die Notizen, dann kannst du ihn jederzeit exakt zurückholen.</p>
+        <textarea id="sv-code-out" readonly rows="3"></textarea>
+        <button id="sv-copy" class="btn">Code kopieren</button>
+        <p class="sv-help">Code einfügen, um einen Spielstand zu laden:</p>
+        <textarea id="sv-code-in" rows="3" placeholder="OS1-…" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+        <button id="sv-load" class="btn primary">Code laden</button>
+      </div>
+
+      <p id="sv-msg" class="sv-msg"></p>
+      <button id="sv-close" class="btn">Schließen</button>
     </div>
   </section>
 

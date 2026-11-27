@@ -6,7 +6,7 @@ import { sfx } from './audio.js';
 export const W = 400;
 const G = 700;                                    // Schwerkraft
 const TAU = Math.PI * 2;
-const RADII = [0, 16, 24, 33, 43, 58];            // Kugelgroesse je Stufe (1 = klein, 4 = gross, 5 = Riese nur im Ultra-Modus)
+const RADII = [0, 16, 24, 33, 43, 58];            // Kugelgroesse je Stufe (1 = klein, 4 = gross, 5 = Riese, ab Level 10 auch in normalen Leveln)
 const APEX = [0, 0.30, 0.40, 0.50, 0.58, 0.64];   // Sprunghoehe je Stufe (Anteil am Spielfeld)
 const COLORS = [null, '#3cf2ff', '#7dff5a', '#ff4fd8', '#ffb13b', '#ff3b5c'];
 const BULLET_COLS = ['#8ffaff', '#fff36b', '#ffae3b', '#ff6bd5', '#c39bff'];
@@ -27,6 +27,7 @@ export const ULTRA = {
   waveSecs: 15,       // alle 15 Sekunden eine neue Welle
   baseHp: 300000,     // Leben einer Riesenkugel in Welle 1
   growth: 1.15,       // +15 % Leben pro Welle
+  laserChance: 0.08,  // Chance, dass eine grosse Kugel (Stufe 4/5) einen Laser fallen laesst
 };
 const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 
@@ -147,7 +148,8 @@ function buildLevel(L) {
   }
   const budget = dps * Math.min(10 + L * 1.5, 40);
   const n = Math.min(3 + Math.floor(L / 3), 12);
-  const maxTier = L < 3 ? 3 : 4, minTier = L < 7 ? 1 : 2;
+  // ab Level 10 eine Stufe groesser (bis zur Riesenkugel), sonst wird es zu leicht
+  const maxTier = L < 3 ? 3 : L < 10 ? 4 : 5, minTier = L < 7 ? 1 : L < 10 ? 2 : 3;
   const queue = [];
   let total = 0, pops = 0;
   for (let i = 0; i < n; i++) {
@@ -161,7 +163,7 @@ function buildLevel(L) {
     boss: false, queue, total, pops,
     coinsT: levelCoins(L),
     maxRoots: Math.min(2 + Math.floor(L / 8), 4),
-    interval: Math.max(2.5, 6 - L * 0.15),
+    interval: Math.max(1.8, 5.5 - L * 0.15),      // Nachschub kommt etwas schneller als bis v1.2 (min. 2,5 s)
   };
 }
 
@@ -454,7 +456,7 @@ export class Game {
 
   begin() { this.state = 'playing'; }
 
-  // Ultra-Modus: alle Power-ups ausser Laser dauerhaft an, Riesenkugeln ohne Ende, keine Muenzen
+  // Ultra-Modus: alle Power-ups ausser Laser dauerhaft an (der faellt ab und zu), Riesenkugeln ohne Ende, keine Muenzen
   startUltra() {
     this.clearWorld();
     this.level = 0;
@@ -724,6 +726,8 @@ export class Game {
     if (this.ultra) {
       this.ultra.pops++;
       if (this.hooks.score) this.hooks.score(this.ultra.pops);
+      // ab und zu faellt der Laser (alles andere ist im Ultra-Modus eh dauerhaft an)
+      if (o.tier >= 4 && this.pw.laser <= 0 && !this.caps.length && Math.random() < ULTRA.laserChance) this.dropCap(o.x, o.y, 'laser');
     } else {
       this.dropCoin(o.x, o.y, this.coinPerPop);
       if (o.tier >= 2 && this.caps.length < 2 && Math.random() < 0.09) this.dropCap(o.x, o.y);
@@ -1100,11 +1104,14 @@ export class Game {
 
   // ----- Power-ups -----
 
-  dropCap(x, y) {
-    let sum = 0;
-    for (const k in POWERS) sum += POWERS[k].w;
-    let r = Math.random() * sum, type = 'shield';
-    for (const k in POWERS) { r -= POWERS[k].w; if (r <= 0) { type = k; break; } }
+  dropCap(x, y, type = null) {
+    if (!type) {
+      let sum = 0;
+      for (const k in POWERS) sum += POWERS[k].w;
+      let r = Math.random() * sum;
+      type = 'shield';
+      for (const k in POWERS) { r -= POWERS[k].w; if (r <= 0) { type = k; break; } }
+    }
     this.caps.push({ x: clamp(x, 20, W - 20), y, vy: -220, type, t: 0, st: 0 });
   }
 
@@ -1644,6 +1651,7 @@ export class Game {
       if (this.ultra) {                         // Ultra: nur Schild-Ladung und Nova-Countdown, der Rest ist eh immer an
         chip('shield', this.player.shield ? 1 : this.ultra.shieldT / ULTRA.shieldRegen);
         chip('nova', 1 - this.ultra.novaT / ULTRA.novaEvery);
+        if (this.pw.laser > 0) chip('laser', this.pw.laser / POWERS.laser.time);
       } else {
         if (this.player.shield) chip('shield', 1);
         for (const k of TIMED) if (this.pw[k] > 0) chip(k, this.pw[k] / POWERS[k].time);
